@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
@@ -23,6 +22,22 @@ const Index = () => {
   const [availableClips, setAvailableClips] = useState<VideoClip[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const detectClipType = (filename: string): VideoClip['type'] => {
+    const lowercaseFilename = filename.toLowerCase();
+    
+    if (lowercaseFilename.includes('hook')) {
+      return 'hook';
+    }
+    if (lowercaseFilename.includes('cta') || lowercaseFilename.includes('call to action')) {
+      return 'cta';
+    }
+    if (lowercaseFilename.includes('selling point') || lowercaseFilename.includes('sp')) {
+      return 'selling-point';
+    }
+    
+    return 'selling-point'; // default type
+  };
+
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;
     if (!files) return;
@@ -42,17 +57,19 @@ const Index = () => {
       video.src = URL.createObjectURL(file);
       const duration = await promise;
 
-      // Add new clip with default type as "selling-point"
+      // Auto-detect clip type from filename
+      const detectedType = detectClipType(file.name);
+
       const newClip: VideoClip = {
         id: `clip-${Date.now()}-${Math.random()}`,
         name: file.name.split('.')[0],
         duration,
-        type: "selling-point",
+        type: detectedType,
         file
       };
 
       setAvailableClips(prev => [...prev, newClip]);
-      toast.success(`Uploaded ${file.name}`);
+      toast.success(`Uploaded ${file.name} as ${detectedType}`);
     }
 
     // Reset file input
