@@ -1,13 +1,14 @@
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { toast } from "sonner";
-import { ChevronRight, DownloadCloud, RefreshCw, Clock } from "lucide-react";
+import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
 
 interface VideoClip {
   id: string;
   name: string;
   duration: number;
   type: "hook" | "selling-point" | "cta";
+  file?: File;
 }
 
 interface Sequence {
@@ -19,35 +20,89 @@ interface Sequence {
 const Index = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(false);
+  const [availableClips, setAvailableClips] = useState<VideoClip[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Mock video clips data - in real app, this would come from your file system
-  const availableClips: VideoClip[] = [
-    { id: "1", name: "Hook 1", duration: 2.5, type: "hook" },
-    { id: "2", name: "Hook 2", duration: 3.0, type: "hook" },
-    { id: "3", name: "Feature 1", duration: 2.0, type: "selling-point" },
-    { id: "4", name: "Feature 2", duration: 2.5, type: "selling-point" },
-    { id: "5", name: "Feature 3", duration: 3.0, type: "selling-point" },
-    { id: "6", name: "CTA 1", duration: 2.0, type: "cta" },
-    { id: "7", name: "CTA 2", duration: 2.5, type: "cta" },
-  ];
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files) return;
+
+    for (const file of Array.from(files)) {
+      // Create a video element to get duration
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+
+      const promise = new Promise<number>((resolve) => {
+        video.onloadedmetadata = () => {
+          resolve(video.duration);
+          URL.revokeObjectURL(video.src);
+        };
+      });
+
+      video.src = URL.createObjectURL(file);
+      const duration = await promise;
+
+      // Add new clip with default type as "selling-point"
+      const newClip: VideoClip = {
+        id: `clip-${Date.now()}-${Math.random()}`,
+        name: file.name.split('.')[0],
+        duration,
+        type: "selling-point",
+        file
+      };
+
+      setAvailableClips(prev => [...prev, newClip]);
+      toast.success(`Uploaded ${file.name}`);
+    }
+
+    // Reset file input
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+  };
+
+  const updateClipType = (clipId: string, newType: VideoClip['type']) => {
+    setAvailableClips(prev =>
+      prev.map(clip =>
+        clip.id === clipId ? { ...clip, type: newType } : clip
+      )
+    );
+  };
+
+  const removeClip = (clipId: string) => {
+    setAvailableClips(prev => prev.filter(clip => clip.id !== clipId));
+    toast.success("Clip removed");
+  };
 
   const generateSequences = useCallback(() => {
+    if (availableClips.length === 0) {
+      toast.error("Please upload some video clips first");
+      return;
+    }
+
+    const hooks = availableClips.filter(clip => clip.type === "hook");
+    const sellingPoints = availableClips.filter(clip => clip.type === "selling-point");
+    const ctas = availableClips.filter(clip => clip.type === "cta");
+
+    if (hooks.length === 0 || ctas.length === 0) {
+      toast.error("You need at least one hook and one CTA clip");
+      return;
+    }
+
     setLoading(true);
     
     // Generate 10 different sequences
     const newSequences: Sequence[] = [];
     
     for (let i = 0; i < 10; i++) {
-      // Always include one hook, 1-3 selling points, and one CTA
-      const hooks = availableClips.filter(clip => clip.type === "hook");
-      const sellingPoints = availableClips.filter(clip => clip.type === "selling-point");
-      const ctas = availableClips.filter(clip => clip.type === "cta");
-      
       const selectedHook = hooks[Math.floor(Math.random() * hooks.length)];
       const selectedCTA = ctas[Math.floor(Math.random() * ctas.length)];
       
-      // Randomly select 1-3 selling points
-      const numSellingPoints = Math.floor(Math.random() * 3) + 1;
+      // Randomly select 1-3 selling points if available
+      const numSellingPoints = Math.min(
+        Math.floor(Math.random() * 3) + 1,
+        sellingPoints.length
+      );
       const shuffledSellingPoints = [...sellingPoints].sort(() => Math.random() - 0.5);
       const selectedSellingPoints = shuffledSellingPoints.slice(0, numSellingPoints);
       
@@ -69,7 +124,7 @@ const Index = () => {
     setSequences(newSequences);
     setLoading(false);
     toast.success("Generated new sequences!");
-  }, []);
+  }, [availableClips]);
 
   const exportSequence = useCallback((sequence: Sequence) => {
     // In a real app, this would trigger video processing
@@ -84,18 +139,70 @@ const Index = () => {
           <h1 className="text-4xl font-bold mb-4 text-gray-900">Video Sequence Generator</h1>
           <p className="text-gray-600 mb-8">Create engaging video sequences from your content clips</p>
           
-          <button
-            onClick={generateSequences}
-            disabled={loading}
-            className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50"
-          >
-            {loading ? (
-              <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
-            ) : (
-              <RefreshCw className="w-5 h-5 mr-2" />
-            )}
-            Generate Sequences
-          </button>
+          <div className="mb-8">
+            <input
+              type="file"
+              ref={fileInputRef}
+              onChange={handleFileUpload}
+              accept="video/*"
+              multiple
+              className="hidden"
+            />
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-900 rounded-lg shadow-sm hover:bg-gray-200 transition-colors mr-4"
+            >
+              <Upload className="w-5 h-5 mr-2" />
+              Upload Videos
+            </button>
+            
+            <button
+              onClick={generateSequences}
+              disabled={loading}
+              className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50"
+            >
+              {loading ? (
+                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-5 h-5 mr-2" />
+              )}
+              Generate Sequences
+            </button>
+          </div>
+
+          {/* Uploaded Clips Section */}
+          {availableClips.length > 0 && (
+            <div className="bg-white rounded-xl p-6 shadow-sm mb-8">
+              <h2 className="text-lg font-semibold mb-4 text-left">Uploaded Clips</h2>
+              <div className="grid gap-4">
+                {availableClips.map((clip) => (
+                  <div key={clip.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
+                    <div className="flex items-center space-x-4">
+                      <span className="text-sm font-medium">{clip.name}</span>
+                      <span className="text-sm text-gray-500">({clip.duration.toFixed(1)}s)</span>
+                    </div>
+                    <div className="flex items-center space-x-4">
+                      <select
+                        value={clip.type}
+                        onChange={(e) => updateClipType(clip.id, e.target.value as VideoClip['type'])}
+                        className="text-sm rounded-md border-gray-300 py-1"
+                      >
+                        <option value="hook">Hook</option>
+                        <option value="selling-point">Selling Point</option>
+                        <option value="cta">CTA</option>
+                      </select>
+                      <button
+                        onClick={() => removeClip(clip.id)}
+                        className="text-gray-500 hover:text-red-500 transition-colors"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-6 animate-fade-in">
