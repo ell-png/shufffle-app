@@ -1,6 +1,8 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
+import { FFmpeg } from '@ffmpeg/ffmpeg';
+import { fetchFile, toBlobURL } from '@ffmpeg/util';
 
 interface VideoClip {
   id: string;
@@ -20,7 +22,35 @@ const Index = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(false);
   const [availableClips, setAvailableClips] = useState<VideoClip[]>([]);
+  const [ffmpeg, setFFmpeg] = useState<FFmpeg | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const initFFmpeg = async () => {
+      try {
+        const ffmpegInstance = new FFmpeg();
+        
+        // Load FFmpeg
+        await ffmpegInstance.load({
+          coreURL: await toBlobURL(
+            `https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js`,
+            'text/javascript'
+          ),
+          wasmURL: await toBlobURL(
+            `https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.wasm`,
+            'application/wasm'
+          ),
+        });
+        
+        setFFmpeg(ffmpegInstance);
+      } catch (error) {
+        console.error('Error initializing FFmpeg:', error);
+        toast.error('Failed to initialize video processing');
+      }
+    };
+
+    initFFmpeg();
+  }, []);
 
   const detectClipType = (filename: string): VideoClip['type'] => {
     const lowercaseFilename = filename.toLowerCase();
@@ -148,11 +178,75 @@ const Index = () => {
     toast.success("Generated new sequences!");
   }, [availableClips]);
 
-  const exportSequence = useCallback((sequence: Sequence) => {
-    // In a real app, this would trigger video processing
-    toast.success("Starting export...");
-    console.log("Exporting sequence:", sequence);
-  }, []);
+  const exportSequence = useCallback(async (sequence: Sequence) => {
+    if (!ffmpeg) {
+      toast.error("Video processing is not ready yet");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      toast.success("Starting export...");
+
+      // Create a list file for concatenation
+      let listFileContent = '';
+      
+      // First, write all video files to FFmpeg's virtual filesystem
+      for (let i = 0; i < sequence.clips.length; i++) {
+        const clip = sequence.clips[i];
+        if (!clip.file) {
+          throw new Error(`Missing file for clip: ${clip.name}`);
+        }
+
+        // Write the file to FFmpeg's virtual filesystem
+        const inputData = await fetchFile(clip.file);
+        await ffmpeg.writeFile(`input${i}.mp4`, inputData);
+        
+        // Add entry to the list file
+        listFileContent += `file input${i}.mp4\n`;
+      }
+
+      // Write the list file
+      await ffmpeg.writeFile('list.txt', listFileContent);
+
+      // Concatenate all videos
+      await ffmpeg.exec([
+        '-f', 'concat',
+        '-safe', '0',
+        '-i', 'list.txt',
+        '-c', 'copy',
+        'output.mp4'
+      ]);
+
+      // Read the output file
+      const outputData = await ffmpeg.readFile('output.mp4');
+      
+      // Create a download link
+      const blob = new Blob([outputData], { type: 'video/mp4' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sequence-${sequence.id}.mp4`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      // Clean up files from FFmpeg's virtual filesystem
+      for (let i = 0; i < sequence.clips.length; i++) {
+        await ffmpeg.deleteFile(`input${i}.mp4`);
+      }
+      await ffmpeg.deleteFile('list.txt');
+      await ffmpeg.deleteFile('output.mp4');
+
+      toast.success("Export completed!");
+    } catch (error) {
+      console.error('Export error:', error);
+      toast.error("Failed to export sequence");
+    } finally {
+      setLoading(false);
+    }
+  }, [ffmpeg]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-8">
