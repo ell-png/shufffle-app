@@ -1,3 +1,4 @@
+
 import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
@@ -28,15 +29,16 @@ const Index = () => {
   useEffect(() => {
     const initFFmpeg = async () => {
       try {
+        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
         const ffmpegInstance = new FFmpeg();
         
-        // Load FFmpeg with correct paths
         await ffmpegInstance.load({
-          coreURL: await toBlobURL(`/node_modules/@ffmpeg/core/dist/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`/node_modules/@ffmpeg/core/dist/ffmpeg-core.wasm`, 'application/wasm'),
+          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
         });
         
         setFFmpeg(ffmpegInstance);
+        toast.success('Video processing initialized');
       } catch (error) {
         console.error('Error initializing FFmpeg:', error);
         toast.error('Failed to initialize video processing');
