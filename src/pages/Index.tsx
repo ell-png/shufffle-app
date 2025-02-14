@@ -91,6 +91,11 @@ const Index = () => {
     toast.success("Clip removed");
   };
 
+  const removeAllClips = () => {
+    setAvailableClips([]);
+    toast.success("All clips removed");
+  };
+
   const generateSequences = useCallback(() => {
     if (availableClips.length === 0) {
       toast.error("Please upload some video clips first");
@@ -190,7 +195,15 @@ const Index = () => {
           {/* Uploaded Clips Section */}
           {availableClips.length > 0 && (
             <div className="bg-white rounded-xl p-6 shadow-sm mb-8">
-              <h2 className="text-lg font-semibold mb-4 text-left">Uploaded Clips</h2>
+              <div className="flex justify-between items-center mb-4">
+                <h2 className="text-lg font-semibold">Uploaded Clips</h2>
+                <button
+                  onClick={removeAllClips}
+                  className="text-sm px-3 py-1 text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                >
+                  Delete All
+                </button>
+              </div>
               <div className="grid gap-4">
                 {availableClips.map((clip) => (
                   <div key={clip.id} className="flex items-center justify-between bg-gray-50 p-4 rounded-lg">
