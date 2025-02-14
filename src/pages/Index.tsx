@@ -30,16 +30,10 @@ const Index = () => {
       try {
         const ffmpegInstance = new FFmpeg();
         
-        // Load FFmpeg
+        // Load FFmpeg with correct paths
         await ffmpegInstance.load({
-          coreURL: await toBlobURL(
-            `https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.js`,
-            'text/javascript'
-          ),
-          wasmURL: await toBlobURL(
-            `https://unpkg.com/@ffmpeg/core@0.12.6/dist/ffmpeg-core.wasm`,
-            'application/wasm'
-          ),
+          coreURL: await toBlobURL(`/node_modules/@ffmpeg/core/dist/ffmpeg-core.js`, 'text/javascript'),
+          wasmURL: await toBlobURL(`/node_modules/@ffmpeg/core/dist/ffmpeg-core.wasm`, 'application/wasm'),
         });
         
         setFFmpeg(ffmpegInstance);
