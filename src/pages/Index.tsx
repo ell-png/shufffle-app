@@ -162,26 +162,44 @@ const Index = () => {
     
     const newSequences: Sequence[] = [];
     const usedCombinations = new Set<string>();
+    const maxAttempts = 100; // Prevent infinite loops
+    let attempts = 0;
 
-    const maxCombinations = hooks.length * ctas.length * Math.pow(2, sellingPoints.length);
-    const numSequences = Math.min(10, maxCombinations);
+    // Calculate maximum possible unique combinations
+    const maxSellingPoints = Math.min(3, sellingPoints.length);
+    const maxCombinations = hooks.length * ctas.length * (
+      // Sum of combinations for 1 to maxSellingPoints
+      Array.from({length: maxSellingPoints}, (_, i) => 
+        binomialCoefficient(sellingPoints.length, i + 1)
+      ).reduce((a, b) => a + b, 0)
+    );
     
-    while (newSequences.length < numSequences) {
+    const targetSequences = Math.min(10, maxCombinations);
+    
+    while (newSequences.length < targetSequences && attempts < maxAttempts) {
+      attempts++;
       const selectedHook = hooks[Math.floor(Math.random() * hooks.length)];
       const selectedCTA = ctas[Math.floor(Math.random() * ctas.length)];
       
       const numSellingPoints = Math.min(
-        Math.floor(Math.random() * 3) + 1,
+        Math.floor(Math.random() * maxSellingPoints) + 1,
         sellingPoints.length
       );
       
-      const shuffledSellingPoints = [...sellingPoints]
-        .sort(() => Math.random() - 0.5)
-        .slice(0, numSellingPoints);
+      // Use Fisher-Yates shuffle for better randomization
+      const shuffledIndices = Array.from({length: sellingPoints.length}, (_, i) => i);
+      for (let i = shuffledIndices.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [shuffledIndices[i], shuffledIndices[j]] = [shuffledIndices[j], shuffledIndices[i]];
+      }
+      
+      const selectedSellingPoints = shuffledIndices
+        .slice(0, numSellingPoints)
+        .map(index => sellingPoints[index]);
       
       const combinationKey = [
         selectedHook.id,
-        ...shuffledSellingPoints.map(sp => sp.id).sort(),
+        ...selectedSellingPoints.map(sp => sp.id).sort(),
         selectedCTA.id
       ].join('|');
       
@@ -190,7 +208,7 @@ const Index = () => {
         
         const sequenceClips = [
           selectedHook,
-          ...shuffledSellingPoints,
+          ...selectedSellingPoints,
           selectedCTA
         ];
         
@@ -314,6 +332,17 @@ const Index = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const binomialCoefficient = (n: number, k: number): number => {
+    if (k > n) return 0;
+    if (k === 0 || k === n) return 1;
+    
+    let result = 1;
+    for (let i = 1; i <= k; i++) {
+      result *= (n + 1 - i) / i;
+    }
+    return Math.floor(result);
   };
 
   return (
