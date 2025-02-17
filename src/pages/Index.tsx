@@ -88,31 +88,66 @@ const Index = () => {
     if (!files) return;
 
     for (const file of Array.from(files)) {
-      const video = document.createElement('video');
-      video.preload = 'metadata';
+      try {
+        let processedFile = file;
+        
+        // Convert MOV to MP4 if necessary
+        if (file.name.toLowerCase().endsWith('.mov')) {
+          toast.info(`Converting ${file.name} to MP4...`);
+          
+          // Write the MOV file to FFmpeg's virtual filesystem
+          const inputData = await fetchFile(file);
+          await ffmpeg.writeFile('input.mov', inputData);
+          
+          // Convert MOV to MP4
+          await ffmpeg.exec([
+            '-i', 'input.mov',
+            '-c:v', 'copy',
+            '-c:a', 'aac',
+            'output.mp4'
+          ]);
+          
+          // Read the converted file
+          const outputData = await ffmpeg.readFile('output.mp4');
+          const outputBlob = new Blob([outputData], { type: 'video/mp4' });
+          processedFile = new File([outputBlob], file.name.replace('.mov', '.mp4'), { type: 'video/mp4' });
+          
+          // Clean up temporary files
+          await ffmpeg.deleteFile('input.mov');
+          await ffmpeg.deleteFile('output.mp4');
+          
+          toast.success(`Converted ${file.name} to MP4`);
+        }
 
-      const promise = new Promise<number>((resolve) => {
-        video.onloadedmetadata = () => {
-          resolve(video.duration);
-          URL.revokeObjectURL(video.src);
+        const video = document.createElement('video');
+        video.preload = 'metadata';
+
+        const promise = new Promise<number>((resolve) => {
+          video.onloadedmetadata = () => {
+            resolve(video.duration);
+            URL.revokeObjectURL(video.src);
+          };
+        });
+
+        video.src = URL.createObjectURL(processedFile);
+        const duration = await promise;
+
+        const detectedType = detectClipType(processedFile.name);
+
+        const newClip: VideoClip = {
+          id: `clip-${Date.now()}-${Math.random()}`,
+          name: processedFile.name.split('.')[0],
+          duration,
+          type: detectedType,
+          file: processedFile
         };
-      });
 
-      video.src = URL.createObjectURL(file);
-      const duration = await promise;
-
-      const detectedType = detectClipType(file.name);
-
-      const newClip: VideoClip = {
-        id: `clip-${Date.now()}-${Math.random()}`,
-        name: file.name.split('.')[0],
-        duration,
-        type: detectedType,
-        file
-      };
-
-      setAvailableClips(prev => [...prev, newClip]);
-      toast.success(`Uploaded ${file.name} as ${detectedType}`);
+        setAvailableClips(prev => [...prev, newClip]);
+        toast.success(`Uploaded ${processedFile.name} as ${detectedType}`);
+      } catch (error) {
+        console.error('Error processing file:', error);
+        toast.error(`Failed to process ${file.name}`);
+      }
     }
 
     if (fileInputRef.current) {
