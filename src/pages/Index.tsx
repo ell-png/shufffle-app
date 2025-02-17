@@ -156,8 +156,12 @@ const Index = () => {
     setLoading(true);
     
     const newSequences: Sequence[] = [];
+    const usedCombinations = new Set<string>();
+
+    const maxCombinations = hooks.length * ctas.length * Math.pow(2, sellingPoints.length);
+    const numSequences = Math.min(10, maxCombinations);
     
-    for (let i = 0; i < 10; i++) {
+    while (newSequences.length < numSequences) {
       const selectedHook = hooks[Math.floor(Math.random() * hooks.length)];
       const selectedCTA = ctas[Math.floor(Math.random() * ctas.length)];
       
@@ -165,27 +169,39 @@ const Index = () => {
         Math.floor(Math.random() * 3) + 1,
         sellingPoints.length
       );
-      const shuffledSellingPoints = [...sellingPoints].sort(() => Math.random() - 0.5);
-      const selectedSellingPoints = shuffledSellingPoints.slice(0, numSellingPoints);
       
-      const sequenceClips = [
-        selectedHook,
-        ...selectedSellingPoints,
-        selectedCTA
-      ];
+      const shuffledSellingPoints = [...sellingPoints]
+        .sort(() => Math.random() - 0.5)
+        .slice(0, numSellingPoints);
       
-      const totalDuration = sequenceClips.reduce((acc, clip) => acc + clip.duration, 0);
+      const combinationKey = [
+        selectedHook.id,
+        ...shuffledSellingPoints.map(sp => sp.id).sort(),
+        selectedCTA.id
+      ].join('|');
       
-      newSequences.push({
-        id: `sequence-${i}`,
-        clips: sequenceClips,
-        duration: totalDuration
-      });
+      if (!usedCombinations.has(combinationKey)) {
+        usedCombinations.add(combinationKey);
+        
+        const sequenceClips = [
+          selectedHook,
+          ...shuffledSellingPoints,
+          selectedCTA
+        ];
+        
+        const totalDuration = sequenceClips.reduce((acc, clip) => acc + clip.duration, 0);
+        
+        newSequences.push({
+          id: `sequence-${newSequences.length + 1}`,
+          clips: sequenceClips,
+          duration: totalDuration
+        });
+      }
     }
     
     setSequences(newSequences);
     setLoading(false);
-    toast.success("Generated new sequences!");
+    toast.success(`Generated ${newSequences.length} unique sequences!`);
   }, [availableClips]);
 
   const exportSequence = useCallback(async (sequence: Sequence, index?: number) => {
