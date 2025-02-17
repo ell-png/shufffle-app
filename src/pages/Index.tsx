@@ -1,6 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
-import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X, Trash2 } from "lucide-react";
+import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { Progress } from "@/components/ui/progress";
@@ -136,11 +136,6 @@ const Index = () => {
   const removeAllClips = () => {
     setAvailableClips([]);
     toast.success("All clips removed");
-  };
-
-  const deleteSequence = (sequenceId: string) => {
-    setSequences(prev => prev.filter(seq => seq.id !== sequenceId));
-    toast.success("Sequence removed");
   };
 
   const generateSequences = useCallback(() => {
@@ -427,20 +422,11 @@ const Index = () => {
               className="bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100"
             >
               <div className="flex items-center justify-between mb-4">
-                <div className="flex items-center space-x-4">
-                  <div className="flex items-center space-x-2">
-                    <Clock className="w-5 h-5 text-gray-400" />
-                    <span className="text-sm text-gray-600">
-                      {sequence.duration.toFixed(1)}s
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => deleteSequence(sequence.id)}
-                    className="text-gray-400 hover:text-red-500 transition-colors"
-                    title="Delete sequence"
-                  >
-                    <Trash2 className="w-5 h-5" />
-                  </button>
+                <div className="flex items-center space-x-2">
+                  <Clock className="w-5 h-5 text-gray-400" />
+                  <span className="text-sm text-gray-600">
+                    {sequence.duration.toFixed(1)}s
+                  </span>
                 </div>
                 <button
                   onClick={() => exportSequence(sequence)}
