@@ -272,7 +272,7 @@ const Index = () => {
       for (let i = 0; i < sequences.length; i++) {
         const result = await exportSequence(sequences[i], i);
         if (result) {
-          zip.file(result.name, result.data);
+          zip.file(`restitched ${i + 1}.mp4`, result.data);
         }
       }
 
