@@ -269,17 +269,12 @@ const Index = () => {
     try {
       const zip = new JSZip();
       
-      const exports = await Promise.all(
-        sequences.map((sequence, index) => 
-          exportSequence(sequence, index)
-        )
-      );
-
-      exports.forEach(exp => {
-        if (exp) {
-          zip.file(exp.name, exp.data);
+      for (let i = 0; i < sequences.length; i++) {
+        const result = await exportSequence(sequences[i], i);
+        if (result) {
+          zip.file(result.name, result.data);
         }
-      });
+      }
 
       const zipContent = await zip.generateAsync({ type: 'blob' });
       const url = URL.createObjectURL(zipContent);
