@@ -1,4 +1,3 @@
-
 import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
@@ -29,13 +28,9 @@ const Index = () => {
   useEffect(() => {
     const initFFmpeg = async () => {
       try {
-        const baseURL = 'https://unpkg.com/@ffmpeg/core@0.12.6/dist/umd';
         const ffmpegInstance = new FFmpeg();
         
-        await ffmpegInstance.load({
-          coreURL: await toBlobURL(`${baseURL}/ffmpeg-core.js`, 'text/javascript'),
-          wasmURL: await toBlobURL(`${baseURL}/ffmpeg-core.wasm`, 'application/wasm'),
-        });
+        await ffmpegInstance.load();
         
         setFFmpeg(ffmpegInstance);
         toast.success('Video processing initialized');
