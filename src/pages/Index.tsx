@@ -4,6 +4,7 @@ import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
 import { Progress } from "@/components/ui/progress";
+import JSZip from 'jszip';
 
 interface VideoClip {
   id: string;
@@ -35,10 +36,8 @@ const Index = () => {
         setLoadingProgress(0);
         const ffmpegInstance = new FFmpeg();
         
-        // Load FFmpeg with progress tracking
         ffmpegInstance.on('log', ({ message }) => {
           console.log('FFmpeg log:', message);
-          // Update progress based on loading messages
           if (message.includes('loading')) {
             setLoadingProgress(25);
           } else if (message.includes('loaded')) {
@@ -89,7 +88,6 @@ const Index = () => {
     if (!files) return;
 
     for (const file of Array.from(files)) {
-      // Create a video element to get duration
       const video = document.createElement('video');
       video.preload = 'metadata';
 
@@ -103,7 +101,6 @@ const Index = () => {
       video.src = URL.createObjectURL(file);
       const duration = await promise;
 
-      // Auto-detect clip type from filename
       const detectedType = detectClipType(file.name);
 
       const newClip: VideoClip = {
@@ -118,7 +115,6 @@ const Index = () => {
       toast.success(`Uploaded ${file.name} as ${detectedType}`);
     }
 
-    // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -159,14 +155,12 @@ const Index = () => {
 
     setLoading(true);
     
-    // Generate 10 different sequences
     const newSequences: Sequence[] = [];
     
     for (let i = 0; i < 10; i++) {
       const selectedHook = hooks[Math.floor(Math.random() * hooks.length)];
       const selectedCTA = ctas[Math.floor(Math.random() * ctas.length)];
       
-      // Randomly select 1-3 selling points if available
       const numSellingPoints = Math.min(
         Math.floor(Math.random() * 3) + 1,
         sellingPoints.length
@@ -194,7 +188,7 @@ const Index = () => {
     toast.success("Generated new sequences!");
   }, [availableClips]);
 
-  const exportSequence = useCallback(async (sequence: Sequence) => {
+  const exportSequence = useCallback(async (sequence: Sequence, index?: number) => {
     if (ffmpegLoading || !ffmpeg) {
       toast.error('Please wait for video processing to initialize');
       return;
@@ -202,30 +196,24 @@ const Index = () => {
 
     try {
       setLoading(true);
-      toast.success("Starting export...");
+      if (!index) toast.success("Starting export...");
 
-      // Create a list file for concatenation
       let listFileContent = '';
       
-      // First, write all video files to FFmpeg's virtual filesystem
       for (let i = 0; i < sequence.clips.length; i++) {
         const clip = sequence.clips[i];
         if (!clip.file) {
           throw new Error(`Missing file for clip: ${clip.name}`);
         }
 
-        // Write the file to FFmpeg's virtual filesystem
         const inputData = await fetchFile(clip.file);
         await ffmpeg.writeFile(`input${i}.mp4`, inputData);
         
-        // Add entry to the list file
         listFileContent += `file input${i}.mp4\n`;
       }
 
-      // Write the list file
       await ffmpeg.writeFile('list.txt', listFileContent);
 
-      // Concatenate all videos
       await ffmpeg.exec([
         '-f', 'concat',
         '-safe', '0',
@@ -234,33 +222,38 @@ const Index = () => {
         'output.mp4'
       ]);
 
-      // Read the output file
       const outputData = await ffmpeg.readFile('output.mp4');
       
-      // Create a download link
-      const blob = new Blob([outputData], { type: 'video/mp4' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sequence-${sequence.id}.mp4`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
+      if (index !== undefined) {
+        return {
+          name: `restitched ${index + 1}.mp4`,
+          data: outputData
+        };
+      } else {
+        const blob = new Blob([outputData], { type: 'video/mp4' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `restitched ${sequence.id}.mp4`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      }
 
-      // Clean up files from FFmpeg's virtual filesystem
       for (let i = 0; i < sequence.clips.length; i++) {
         await ffmpeg.deleteFile(`input${i}.mp4`);
       }
       await ffmpeg.deleteFile('list.txt');
       await ffmpeg.deleteFile('output.mp4');
 
-      toast.success("Export completed!");
+      if (!index) toast.success("Export completed!");
     } catch (error) {
       console.error('Export error:', error);
-      toast.error("Failed to export sequence");
+      if (!index) toast.error("Failed to export sequence");
+      throw error;
     } finally {
-      setLoading(false);
+      if (!index) setLoading(false);
     }
   }, [ffmpeg, ffmpegLoading]);
 
@@ -274,9 +267,30 @@ const Index = () => {
     toast.success("Starting batch download...");
 
     try {
-      for (const sequence of sequences) {
-        await exportSequence(sequence);
-      }
+      const zip = new JSZip();
+      
+      const exports = await Promise.all(
+        sequences.map((sequence, index) => 
+          exportSequence(sequence, index)
+        )
+      );
+
+      exports.forEach(exp => {
+        if (exp) {
+          zip.file(exp.name, exp.data);
+        }
+      });
+
+      const zipContent = await zip.generateAsync({ type: 'blob' });
+      const url = URL.createObjectURL(zipContent);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'restitched-sequences.zip';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
       toast.success("All sequences downloaded!");
     } catch (error) {
       console.error('Batch download error:', error);
@@ -348,7 +362,6 @@ const Index = () => {
             )}
           </div>
 
-          {/* Uploaded Clips Section */}
           {availableClips.length > 0 && (
             <div className="bg-white rounded-xl p-6 shadow-sm mb-8">
               <div className="flex justify-between items-center mb-4">
