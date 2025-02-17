@@ -3,6 +3,7 @@ import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
 import { fetchFile } from '@ffmpeg/util';
+import { Progress } from "@/components/ui/progress";
 
 interface VideoClip {
   id: string;
@@ -22,6 +23,7 @@ const Index = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(false);
   const [ffmpegLoading, setFfmpegLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [availableClips, setAvailableClips] = useState<VideoClip[]>([]);
   const [ffmpeg, setFFmpeg] = useState<FFmpeg | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -30,15 +32,25 @@ const Index = () => {
     const initFFmpeg = async () => {
       try {
         setFfmpegLoading(true);
+        setLoadingProgress(0);
         const ffmpegInstance = new FFmpeg();
         
-        // Load FFmpeg with log messages
+        // Load FFmpeg with progress tracking
         ffmpegInstance.on('log', ({ message }) => {
           console.log('FFmpeg log:', message);
+          // Update progress based on loading messages
+          if (message.includes('loading')) {
+            setLoadingProgress(25);
+          } else if (message.includes('loaded')) {
+            setLoadingProgress(50);
+          } else if (message.includes('initialized')) {
+            setLoadingProgress(75);
+          }
         });
 
         await ffmpegInstance.load();
         setFFmpeg(ffmpegInstance);
+        setLoadingProgress(100);
         setFfmpegLoading(false);
         toast.success('Video processing initialized');
       } catch (error) {
@@ -252,12 +264,41 @@ const Index = () => {
     }
   }, [ffmpeg, ffmpegLoading]);
 
+  const downloadAllSequences = async () => {
+    if (ffmpegLoading || !ffmpeg || sequences.length === 0) {
+      toast.error('No sequences to download or processing not ready');
+      return;
+    }
+
+    setLoading(true);
+    toast.success("Starting batch download...");
+
+    try {
+      for (const sequence of sequences) {
+        await exportSequence(sequence);
+      }
+      toast.success("All sequences downloaded!");
+    } catch (error) {
+      console.error('Batch download error:', error);
+      toast.error("Failed to download all sequences");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-8">
       <div className="max-w-6xl mx-auto">
         <div className="text-center mb-12 animate-fade-up">
           <h1 className="text-4xl font-bold mb-4 text-gray-900">Video Sequence Generator</h1>
           <p className="text-gray-600 mb-8">Create engaging video sequences from your content clips</p>
+          
+          {ffmpegLoading && (
+            <div className="max-w-md mx-auto mb-8">
+              <Progress value={loadingProgress} className="h-2" />
+              <p className="text-sm text-gray-500 mt-2">Initializing... {loadingProgress}%</p>
+            </div>
+          )}
           
           <div className="mb-8">
             <input
@@ -285,7 +326,7 @@ const Index = () => {
             <button
               onClick={generateSequences}
               disabled={loading || ffmpegLoading}
-              className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed mr-4"
             >
               {loading ? (
                 <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
@@ -294,6 +335,17 @@ const Index = () => {
               )}
               Generate Sequences
             </button>
+
+            {sequences.length > 0 && (
+              <button
+                onClick={downloadAllSequences}
+                disabled={loading || ffmpegLoading}
+                className="inline-flex items-center px-6 py-3 bg-blue-500 text-white rounded-lg shadow-sm hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <DownloadCloud className="w-5 h-5 mr-2" />
+                Download All
+              </button>
+            )}
           </div>
 
           {/* Uploaded Clips Section */}
