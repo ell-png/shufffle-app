@@ -2,7 +2,7 @@ import { useState, useCallback, useRef, useEffect } from "react";
 import { toast } from "sonner";
 import { ChevronRight, DownloadCloud, RefreshCw, Clock, Upload, X } from "lucide-react";
 import { FFmpeg } from '@ffmpeg/ffmpeg';
-import { fetchFile, toBlobURL } from '@ffmpeg/util';
+import { fetchFile } from '@ffmpeg/util';
 
 interface VideoClip {
   id: string;
@@ -21,6 +21,7 @@ interface Sequence {
 const Index = () => {
   const [sequences, setSequences] = useState<Sequence[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ffmpegLoading, setFfmpegLoading] = useState(true);
   const [availableClips, setAvailableClips] = useState<VideoClip[]>([]);
   const [ffmpeg, setFFmpeg] = useState<FFmpeg | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -28,15 +29,22 @@ const Index = () => {
   useEffect(() => {
     const initFFmpeg = async () => {
       try {
+        setFfmpegLoading(true);
         const ffmpegInstance = new FFmpeg();
         
+        // Load FFmpeg with log messages
+        ffmpegInstance.on('log', ({ message }) => {
+          console.log('FFmpeg log:', message);
+        });
+
         await ffmpegInstance.load();
-        
         setFFmpeg(ffmpegInstance);
+        setFfmpegLoading(false);
         toast.success('Video processing initialized');
       } catch (error) {
         console.error('Error initializing FFmpeg:', error);
         toast.error('Failed to initialize video processing');
+        setFfmpegLoading(false);
       }
     };
 
@@ -60,6 +68,11 @@ const Index = () => {
   };
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    if (ffmpegLoading || !ffmpeg) {
+      toast.error('Please wait for video processing to initialize');
+      return;
+    }
+
     const files = event.target.files;
     if (!files) return;
 
@@ -170,8 +183,8 @@ const Index = () => {
   }, [availableClips]);
 
   const exportSequence = useCallback(async (sequence: Sequence) => {
-    if (!ffmpeg) {
-      toast.error("Video processing is not ready yet");
+    if (ffmpegLoading || !ffmpeg) {
+      toast.error('Please wait for video processing to initialize');
       return;
     }
 
@@ -237,7 +250,7 @@ const Index = () => {
     } finally {
       setLoading(false);
     }
-  }, [ffmpeg]);
+  }, [ffmpeg, ffmpegLoading]);
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-gray-100 p-8">
@@ -254,19 +267,25 @@ const Index = () => {
               accept="video/*"
               multiple
               className="hidden"
+              disabled={ffmpegLoading}
             />
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-900 rounded-lg shadow-sm hover:bg-gray-200 transition-colors mr-4"
+              className="inline-flex items-center px-6 py-3 bg-gray-100 text-gray-900 rounded-lg shadow-sm hover:bg-gray-200 transition-colors mr-4 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={ffmpegLoading}
             >
-              <Upload className="w-5 h-5 mr-2" />
-              Upload Videos
+              {ffmpegLoading ? (
+                <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
+              ) : (
+                <Upload className="w-5 h-5 mr-2" />
+              )}
+              {ffmpegLoading ? 'Initializing...' : 'Upload Videos'}
             </button>
             
             <button
               onClick={generateSequences}
-              disabled={loading}
-              className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50"
+              disabled={loading || ffmpegLoading}
+              className="inline-flex items-center px-6 py-3 bg-black text-white rounded-lg shadow-sm hover:bg-gray-900 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <RefreshCw className="w-5 h-5 mr-2 animate-spin" />
